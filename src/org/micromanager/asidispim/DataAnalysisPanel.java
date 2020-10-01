@@ -17,6 +17,8 @@ import java.awt.event.ActionListener;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.File;
+import java.io.*;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
 
 import javax.swing.JButton;
@@ -74,7 +76,8 @@ public class DataAnalysisPanel extends ListeningJPanel {
    private final JCheckBox deskewInterpolate_;
    private final JCheckBox deskewAutoTest_;
    private final JButton exportButton_;
-   
+   private final JCheckBox cropExport_;
+
    private final JPanel sliceOverviewPanel_;
    private final JSpinner yDownsample_;
    private final JSpinner spacingDownsample_;
@@ -204,6 +207,11 @@ public class DataAnalysisPanel extends ListeningJPanel {
       progBar.setVisible(false);
       final JLabel infoLabel = new JLabel("");
      
+      
+      cropExport_ = pu.makeCheckBox("Crop to ROI",
+              Properties.Keys.PLUGIN_EXPORT_CROP, panelName_, true);
+        exportPanel_.add(cropExport_, "left, span 2, wrap");
+      
       exportButton_ = new JButton("Export");
       exportButton_.addActionListener(new ActionListener() {
          @Override
@@ -890,21 +898,40 @@ public class DataAnalysisPanel extends ListeningJPanel {
             throw new SaveTaskException("Should import Micro-Manager datasets "
                   + "directly into Fiji Multiview reconstruction as of April 2015.");
          } else
-         if (exportFormat_ == 2) { // cudaDecon
+         if (exportFormat_ == 2) { // Export files compatible with cudaDecon and LLSpy GUI, containign single stacks, conforming to the following pattern
+        	 						// {basename}_ch{0}_stack{0000}_{wavelength}nm.tif .  Also supports now cropping of image stacks (XY only) to a selected ROI during export
              
              final boolean multiPosition = mmW.getNumberOfPositions() > 1;
              
              final boolean firstSideIsA = ! mmW.getSummaryMetaData().getString("FirstSide").equals("B");
              
+             
              for (int position = 0; position < mmW.getNumberOfPositions(); position++) {
                 
                 ImageProcessor iProc = ip.getProcessor();
+                
+                // Generating Settings.txt which fakes a LLS settings txt file
+                
+                String timepoints = mmW.getSummaryMetaData().getString("Frames");         
+                        
+                String channels = mmW.getSummaryMetaData().getString("Channels");        
+                
+                String slices = mmW.getSummaryMetaData().getString("Slices");
+                
+                String savesettings = targetDirectory_ + File.separator + baseName_ + File.separator + (multiPosition ? ("Pos" + position + File.separator) : "")+ File.separator + "Settings.txt";
+                
+                
+                
+
+
+                //
                 
                 final int nrSides;
                 final String strNrSides = mmW.getSummaryMetaData().getString("NumberOfSides").substring(0, 1);
                 if (strNrSides.equals("1")) {
                    nrSides = 1;
-                //removed dual side, since that will not work
+                //removed dual side, since that will not work, 
+               //    TODO: modify for dual camera acquisitions
                 } else {
                    throw new SaveTaskException("unsupported number of sides");
                 }
@@ -919,7 +946,8 @@ public class DataAnalysisPanel extends ListeningJPanel {
                       channelDirArray[c] = targetDirectory_ + File.separator + baseName_ + File.separator
                             + (multiPosition ? ("Pos" + position + File.separator) : "");
                    }
-                } else {  // two channels are from two views, no need for separate folders for each channel
+                } else {throw new SaveTaskException("unsupported number of sides");  // not compatible with two-sided acquisition
+                		// TODO catch this and abort
                                }
 
                 for (String dir : channelDirArray) {
@@ -931,7 +959,26 @@ public class DataAnalysisPanel extends ListeningJPanel {
                 for (String dir : channelDirArray) {
                    new File(dir).mkdirs();
                 }
+                
+                BufferedWriter settings_txt = new BufferedWriter(new FileWriter(savesettings));
+                try {
 
+                    settings_txt.write(timepoints);
+                    settings_txt.write("\n");
+                    settings_txt.write(channels);
+                    settings_txt.write("\n");
+                    settings_txt.write(slices);
+                }
+                catch (IOException e)
+                {
+                    System.out.println("Could not write settings.txt");
+
+                }
+                finally
+                {
+                    settings_txt.close();
+                } 
+                
                 int totalNr = mmW.getNumberOfChannels() * mmW.getNumberOfFrames() * mmW.getNumberOfSlices();
                 int counter = 0;
 
@@ -971,10 +1018,12 @@ public class DataAnalysisPanel extends ListeningJPanel {
                          double rate = ((double) counter / (double) totalNr) * 100.0;
                          setProgress((int) Math.round(rate));
                       }
-                  	  Roi cropRoi = ip.getRoi();
+                      final boolean crop_on_export = cropExport_.isSelected();
+                  	  if (crop_on_export ==true){
+                      Roi cropRoi = ip.getRoi();
                   	  if (cropRoi!=null){
                   	  Rectangle bounds = cropRoi.getBounds();
-                  	  stack = stack.crop(bounds.x, bounds.y, 0, bounds.width, bounds.height, mmW.getNumberOfSlices());}
+                  	  stack = stack.crop(bounds.x, bounds.y, 0, bounds.width, bounds.height, mmW.getNumberOfSlices());}}
                   	  ImagePlus ipN = new ImagePlus("tmp", stack);
                       ipN.setCalibration(ip.getCalibration());
 
