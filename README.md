@@ -9,6 +9,6 @@ Changes in comparison to the original version:
 - Cropping of files during export to a ROI - Completed
 
 Planned changes:
-- Reducing the numbe rof tabs to simplify user interaction
+- Reducing the number of diSPIM-specific tabs to simplify user interaction
 - Adding stage controllers for light sheet angle
 - Support for ASI CRISP during acquisition
