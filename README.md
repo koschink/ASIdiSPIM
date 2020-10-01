@@ -6,7 +6,8 @@ Changes in comparison to the original version:
 - Export of files which are directly compatible to cudaDeconv and LLSpy by Tally Lambert (changes in naming schemes) - in progress
   - Writes a "fake" Settings.txt which stores LatticeLightSheet acquisition settings
  
-- Cropping of files during export to a ROI - Completed
+- Cropping of files to a ROI during export - Completed
+ - added a checkbox to disable this behaviour
 
 Planned changes:
 - Reducing the number of diSPIM-specific tabs to simplify user interaction
