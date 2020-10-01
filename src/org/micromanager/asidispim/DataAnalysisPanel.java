@@ -9,6 +9,7 @@ import ij.WindowManager;
 import ij.process.ImageProcessor;
 import mmcorej.StrVector;
 
+import java.lang.*;
 import java.awt.Cursor;
 import java.awt.Insets;
 import java.awt.Rectangle;
@@ -20,6 +21,8 @@ import java.io.File;
 import java.io.*;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
@@ -71,13 +74,13 @@ public class DataAnalysisPanel extends ListeningJPanel {
 //   private final JPanel otherPanel_;
    private final JTextField saveDestinationField_;
    private final JTextField baseNameField_;
+   private final JTextField magnification;
    private final JSpinner deskewFactor_;
    private final JCheckBox deskewInvert_;
    private final JCheckBox deskewInterpolate_;
    private final JCheckBox deskewAutoTest_;
    private final JButton exportButton_;
    private final JCheckBox cropExport_;
-
    private final JPanel sliceOverviewPanel_;
    private final JSpinner yDownsample_;
    private final JSpinner spacingDownsample_;
@@ -111,6 +114,7 @@ public class DataAnalysisPanel extends ListeningJPanel {
       prefs_ = prefs;
       props_ = props;
       devices_ = devices;
+      DeviceUtils du = new DeviceUtils(gui_, devices_, props_, prefs_);
       PanelUtils pu = new PanelUtils(prefs, props, devices);
       final DataAnalysisPanel dataAnalysisPanel = this;
             
@@ -211,6 +215,25 @@ public class DataAnalysisPanel extends ListeningJPanel {
       cropExport_ = pu.makeCheckBox("Crop to ROI",
               Properties.Keys.PLUGIN_EXPORT_CROP, panelName_, true);
         exportPanel_.add(cropExport_, "left, span 2, wrap");
+      
+       // Add some stage scan properties to be able to export offline, not sure if this will collide with the settings panel
+        
+        if (devices_.isTigerDevice(Devices.Keys.XYSTAGE)
+                && props_.hasProperty(Devices.Keys.XYSTAGE, Properties.Keys.STAGESCAN_NUMLINES)) {
+        	exportPanel_.add(new JLabel("Using the settings from the settings panel"), "left, wrap");
+        }
+        else{
+        	    final JSpinner stageAnglePathA;
+        	    exportPanel_.add(new JLabel("Objective angle:"), "span 2");
+        	    stageAnglePathA = pu.makeSpinnerFloat(1, 89, 1,
+                Devices.Keys.PLUGIN, Properties.Keys.PLUGIN_STAGESCAN_ANGLE_PATHA,
+                ASIdiSPIM.oSPIM ? 60 : 45);
+          stageAnglePathA.setToolTipText("for Path A, e.g. 60 for oSPIM and 45 for symmetric diSPIM");
+          exportPanel_.add(stageAnglePathA, "wrap");}
+        exportPanel_.add(new JLabel("Magnification:"), "");
+        magnification = new JTextField(20);
+        magnification.setText("70");
+        exportPanel_.add(magnification, "wrap");
       
       exportButton_ = new JButton("Export");
       exportButton_.addActionListener(new ActionListener() {
@@ -912,13 +935,67 @@ public class DataAnalysisPanel extends ListeningJPanel {
                 
                 // Generating Settings.txt which fakes a LLS settings txt file
                 
+                String date = mmW.getSummaryMetaData().getString("StartTime");
+                String time = date.substring(10,19);
+                date = date.substring(0,11);
+                String newdate = date.substring(5,7)+"/"+date.substring(8,10)+"/"+date.substring(0,4);
+                date = newdate + time;
                 String timepoints = mmW.getSummaryMetaData().getString("Frames");         
-                        
                 String channels = mmW.getSummaryMetaData().getString("Channels");        
-                
                 String slices = mmW.getSummaryMetaData().getString("Slices");
+                String zstep = mmW.getSummaryMetaData().getString("z-step_um");
+                String spimmode = mmW.getSummaryMetaData().getString("SPIMmode");
+                String scanmode;
+                double stageangle = props_.getPropValueFloat(Devices.Keys.PLUGIN, Properties.Keys.PLUGIN_STAGESCAN_ANGLE_PATHA);
+                stageangle= 90-stageangle;
                 
-                String savesettings = targetDirectory_ + File.separator + baseName_ + File.separator + (multiPosition ? ("Pos" + position + File.separator) : "")+ File.separator + "Settings.txt";
+                double zstepDbl = Double.parseDouble(zstep);
+                double xstep = zstepDbl/Math.sin(Math.toRadians(stageangle));
+
+                
+                Map<String, Integer> spimmodes = new HashMap<String, Integer>();
+                spimmodes.put("Stage scan", 0);
+                spimmodes.put("Stage scan interleaved", 1);
+                spimmodes.put("Stage scan unidirectional", 2);
+                spimmodes.put("Synchronous piezo/slice scan", 3);
+                
+                int scankey = spimmodes.get(spimmode);
+
+
+                boolean stagescan;
+                
+                switch(scankey){
+                
+                case 0: 
+                	scanmode = "Sample piezo";
+                	stagescan = true;
+                	break;
+                	
+                case 1: 
+                	scanmode = "Sample piezo";
+                	stagescan = true;
+                	break;
+                	
+                case 2: 
+                	scanmode = "Sample piezo";
+                	stagescan = true;
+                	break;
+                	
+                case 3:
+                	scanmode = "Z piezo";
+                	stagescan = false;
+                	break;
+                
+                default:
+                	scanmode = "Sample piezo";
+                	stagescan = true;
+                }
+                
+                
+                String camroi = mmW.getImageMetadata(0,0,0,0).getString("ROI");         
+                String exposure = mmW.getSummaryMetaData().getString("LaserExposure_ms");         
+                
+                String savesettings = targetDirectory_ + File.separator + baseName_ + File.separator + (multiPosition ? ("Pos" + position + File.separator) : "")+ File.separator + baseName_+"_Settings.txt";
                 
                 
                 
@@ -962,12 +1039,56 @@ public class DataAnalysisPanel extends ListeningJPanel {
                 
                 BufferedWriter settings_txt = new BufferedWriter(new FileWriter(savesettings));
                 try {
+                	settings_txt.write("***** ***** ***** General ***** ***** ***** \n");
+                	settings_txt.write("Date : "+ date + "\n");
+                	settings_txt.write("Acq Mode :	Z stack \n");
+                	settings_txt.write("Version :	v 1 \n");
+                	settings_txt.write("***** ***** ***** Waveform ***** ***** *****\n");
+                	
+                	for (int c = 0; c < mmW.getNumberOfChannels(); c++){
+                		settings_txt.write("S PZT Offset, Interval (um), # of Pixels for Excitation ("+c+") :	1	"+String.format(Locale.US,"%.3f",xstep)+"	NA");
+                		settings_txt.write("\n");
+                	}
+                	settings_txt.write("\n");
+                	for (int c = 0; c < mmW.getNumberOfChannels(); c++){
+                		settings_txt.write("# of stacks ("+c+") :	" + timepoints);
+                		settings_txt.write("\n");
+                	}
+                	settings_txt.write("\n");
+                	for (int c = 0; c < mmW.getNumberOfChannels(); c++){
+                		String chName1 = (String)mmW.getSummaryMetaData().getJSONArray("ChNames").get(c);
+                        String colorName1 = chName1.substring(chName1.indexOf("-")+1);  // matches with AcquisitionPanel naming convention
+                		settings_txt.write("Excitation Filter, Laser, Power (%), Exp(ms) ("+c+") :	N/A	"+colorName1.substring(0,3)+"	1	"+ exposure);
+                		settings_txt.write("\n");
+                	}
+                	settings_txt.write("\n");
+                    settings_txt.write("Cycle lasers :	per Z \n");
+                    settings_txt.write("\n");
+                    settings_txt.write("Z motion :	"+ scanmode+ "\n");
+                    settings_txt.write("\n");
+                    settings_txt.write("***** ***** *****   Camera  ***** ***** ***** \n");
+                    settings_txt.write("Model :	C11440-22C\n");
+                    settings_txt.write("ROI :	"+camroi + "\n"); 
+                    settings_txt.write("Binning :	X=1 Y=1 \n"); 
+                    
+                    settings_txt.write("***** ***** *****   Advanced Timing  ***** ***** *****  \n");
+                    settings_txt.write("Trigger Mode :	SLM -> Cam \n");
+                    settings_txt.write(" \n");
+                    settings_txt.write("***** ***** *****   .ini File  ***** ***** *****  \n");
+                    settings_txt.write(" \n");
+                    settings_txt.write("[Detection optics] \n");
+                    settings_txt.write("Magnification ="+magnification.getText() +"\n");
+                    settings_txt.write(" \n");
+                    settings_txt.write("[General] \n");
+                    settings_txt.write("Camera type =\"Orca4.0\" \n");
+                    settings_txt.write("# of exp per SLM enable = 0.25 \n");
+                    settings_txt.write("Cam Trigger mode = \"SLM -> Cam\" \n");
+                    settings_txt.write(" \n");
+                    settings_txt.write("[Sample stage] \n");
+                    settings_txt.write("Angle between stage and bessel beam (deg) = "+stageangle +"\n");
+                    settings_txt.write(" \n");
+                    settings_txt.write("[OTF files] \n");
 
-                    settings_txt.write(timepoints);
-                    settings_txt.write("\n");
-                    settings_txt.write(channels);
-                    settings_txt.write("\n");
-                    settings_txt.write(slices);
                 }
                 catch (IOException e)
                 {
@@ -991,9 +1112,6 @@ public class DataAnalysisPanel extends ListeningJPanel {
                     	 
                          iProc2 = mmW.getImageProcessor(c, i, t, position + 1);  // positions are 1-indexed
 
-
-
-                         
                          // optional transformation
                          switch (transformIndex_) {
                          case 1: {
@@ -1018,6 +1136,20 @@ public class DataAnalysisPanel extends ListeningJPanel {
                          double rate = ((double) counter / (double) totalNr) * 100.0;
                          setProgress((int) Math.round(rate));
                       }
+                      String totaltime = "none";
+                      totaltime= mmW.getImageMetadata(c,0,t,position).getString("ElapsedTime-ms");
+                      
+                      String abstime = mmW.getImageMetadata(c,0,t,position).getString("TimeReceivedByCore"); 
+                      // converting "abstime" to some dummy value to generate the "abstime" part of the filename
+                      // to do this we take the actual time and convert it to ms
+                      int abstime_hours = Integer.valueOf(abstime.substring(11,13))*3600*1000;
+                      int abstime_min = Integer.valueOf(abstime.substring (14,16))*60*1000;                         
+                      int abstime_sec = Integer.valueOf(abstime.substring (17,19))*1000;
+                      int abstime_ms = Integer.valueOf(abstime.substring (20,23));
+                      int abstime_sum = (abstime_hours + abstime_min + abstime_sec + abstime_ms);
+
+                      
+                      
                       final boolean crop_on_export = cropExport_.isSelected();
                   	  if (crop_on_export ==true){
                       Roi cropRoi = ip.getRoi();
@@ -1030,7 +1162,8 @@ public class DataAnalysisPanel extends ListeningJPanel {
                       String chName = (String)mmW.getSummaryMetaData().getJSONArray("ChNames").get(c);
                       String colorName = chName.substring(chName.indexOf("-")+1);  // matches with AcquisitionPanel naming convention
                       ij.IJ.save(ipN, channelDirArray[c] + File.separator + baseName_
-                            + "_ch"+c+"_"+"stack"+ String.format("%04d", t) + "_"+ colorName +".tif");
+                            + "_ch"+c+"_"+"stack"+ String.format("%04d", t) + "_"+ colorName +"_"+ String.format("%07d",Integer.parseInt(totaltime))+"msec_"+String.format("%010d",abstime_sum)+"msecAbs.tif");
+                      //System.out.println(totaltime);
                    }
                 }
              }

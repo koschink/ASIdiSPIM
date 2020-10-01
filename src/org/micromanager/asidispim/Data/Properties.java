@@ -223,6 +223,7 @@ public class Properties {
       PLUGIN_PIEZO_CENTER_POS ("PiezoCenterPosition"), // Piezo center position for acquisition
       PLUGIN_SLOPE_SHEET_WIDTH ("SlopeSheetWidth"),    // Rate in sheet generating axis in degrees/1000px
       PLUGIN_EXPORT_DATA_DIR ("ExportDataDirectory"),  // Place data are saved in mipav/multiview format 
+      PLUGIN_EXPORT_CROP("ExportCropped", true), // 
       PLUGIN_EXPORT_TRANSFORM_OPTION("ExportTransformOption"), // Transform to be applied when exporting data
       PLUGIN_EXPORT_FORMAT("ExportFormatOption"), // Output format of export pane
       PLUGIN_POSITION_DELAY("PositionDelay"),
