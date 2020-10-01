@@ -1,6 +1,6 @@
 # ASIdiSPIM
 
-This is a modification of the ASIdiSPIM micromanager plugin (from Jon Daniels, jon@asiimaging.com) with adaptions to control a single objective light sheet microsope (Mr. Snouty), based on ASI hardware.
+This is a modification of the ASIdiSPIM micromanager plugin (from Jon Daniels, jon@asiimaging.com) with adaptions to control a single objective light sheet microsope (SOLS - aka "Mr. Snouty"), based on ASI hardware.
 
 Changes in comparison to the original version:
 - Export of files which are directly compatible to cudaDeconv and LLSpy by Tally Lambert (changes in naming schemes) - in progress
