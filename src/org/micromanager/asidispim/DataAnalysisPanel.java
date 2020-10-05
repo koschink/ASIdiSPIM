@@ -1083,6 +1083,7 @@ public class DataAnalysisPanel extends ListeningJPanel {
                     settings_txt.write("Camera type =\"Orca4.0\" \n");
                     settings_txt.write("# of exp per SLM enable = 0.25 \n");
                     settings_txt.write("Cam Trigger mode = \"SLM -> Cam\" \n");
+                    settings_txt.write("Twin cam mode? = FALSE \n"); // required for Napari ND reader 
                     settings_txt.write(" \n");
                     settings_txt.write("[Sample stage] \n");
                     settings_txt.write("Angle between stage and bessel beam (deg) = "+stageangle +"\n");
@@ -1106,8 +1107,13 @@ public class DataAnalysisPanel extends ListeningJPanel {
                 for (int c = 0; c < mmW.getNumberOfChannels(); c++) {  // for each channel
                    for (int t = 0; t < mmW.getNumberOfFrames(); t++) {  // for each timepoint
                 	  ImageStack stack = new ImageStack(iProc.getWidth(), iProc.getHeight());
+
+
                       for (int i = 0; i < mmW.getNumberOfSlices(); i++) {
+                    	  
+
                     	 
+
                     	 ImageProcessor iProc2;
                     	 
                          iProc2 = mmW.getImageProcessor(c, i, t, position + 1);  // positions are 1-indexed
@@ -1132,30 +1138,51 @@ public class DataAnalysisPanel extends ListeningJPanel {
                          }
                          }
                          stack.addSlice(iProc2);
+                     	 System.out.println("Slice :" + i + "added");
+
                          counter++;
                          double rate = ((double) counter / (double) totalNr) * 100.0;
                          setProgress((int) Math.round(rate));
                       }
-                      String totaltime = "none";
+
+                  	  
+                  	  String totaltime = "none";
+                      try{
                       totaltime= mmW.getImageMetadata(c,0,t,position).getString("ElapsedTime-ms");
+                  	  } catch (NullPointerException np) {
+                  		  totaltime = "001";
+                      	  System.out.println("Could not read timing metadata, inserting dummy value");
+                  	  }
                       
-                      String abstime = mmW.getImageMetadata(c,0,t,position).getString("TimeReceivedByCore"); 
-                      // converting "abstime" to some dummy value to generate the "abstime" part of the filename
-                      // to do this we take the actual time and convert it to ms
+                  	  System.out.println("total time :" + totaltime);
+                  	  System.out.println("getting total time - done");
+                  	  System.out.println("getting abs time");
+                  	  String abstime = "none";
+                  	  int abstime_sum = 999999 ;
+                  	  try{
+                      abstime = mmW.getImageMetadata(c,0,t,position).getString("TimeReceivedByCore"); 
                       int abstime_hours = Integer.valueOf(abstime.substring(11,13))*3600*1000;
                       int abstime_min = Integer.valueOf(abstime.substring (14,16))*60*1000;                         
                       int abstime_sec = Integer.valueOf(abstime.substring (17,19))*1000;
                       int abstime_ms = Integer.valueOf(abstime.substring (20,23));
-                      int abstime_sum = (abstime_hours + abstime_min + abstime_sec + abstime_ms);
+                      abstime_sum = (abstime_hours + abstime_min + abstime_sec + abstime_ms);
+                  	  } catch (NullPointerException np) {
+                  		  abstime = "001";
+                  		  abstime_sum = 999999999;
+                      	  System.out.println("Could not read timing metadata, inserting dummy value");
+                  	  }
 
-                      
-                      
+                  	   // converting "abstime" to some dummy value to generate the "abstime" part of the filename
+                      // to do this we take the actual time and convert it to ms
+
+
                       final boolean crop_on_export = cropExport_.isSelected();
                   	  if (crop_on_export ==true){
                       Roi cropRoi = ip.getRoi();
                   	  if (cropRoi!=null){
                   	  Rectangle bounds = cropRoi.getBounds();
                   	  stack = stack.crop(bounds.x, bounds.y, 0, bounds.width, bounds.height, mmW.getNumberOfSlices());}}
+
                   	  ImagePlus ipN = new ImagePlus("tmp", stack);
                       ipN.setCalibration(ip.getCalibration());
 
@@ -1163,6 +1190,7 @@ public class DataAnalysisPanel extends ListeningJPanel {
                       String colorName = chName.substring(chName.indexOf("-")+1);  // matches with AcquisitionPanel naming convention
                       ij.IJ.save(ipN, channelDirArray[c] + File.separator + baseName_
                             + "_ch"+c+"_"+"stack"+ String.format("%04d", t) + "_"+ colorName +"_"+ String.format("%07d",Integer.parseInt(totaltime))+"msec_"+String.format("%010d",abstime_sum)+"msecAbs.tif");
+
                       //System.out.println(totaltime);
                    }
                 }
