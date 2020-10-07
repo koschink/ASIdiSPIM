@@ -1083,7 +1083,7 @@ public class DataAnalysisPanel extends ListeningJPanel {
                     settings_txt.write("Camera type =\"Orca4.0\" \n");
                     settings_txt.write("# of exp per SLM enable = 0.25 \n");
                     settings_txt.write("Cam Trigger mode = \"SLM -> Cam\" \n");
-                    settings_txt.write("Twin cam mode? = FALSE \n"); // required for Napari ND reader 
+                    settings_txt.write("Twin cam mode? = FALSE \n"); // required entry for Napari ND reader 
                     settings_txt.write(" \n");
                     settings_txt.write("[Sample stage] \n");
                     settings_txt.write("Angle between stage and bessel beam (deg) = "+stageangle +"\n");
@@ -1155,6 +1155,19 @@ public class DataAnalysisPanel extends ListeningJPanel {
                   	  }
                       
                   	  System.out.println("total time :" + totaltime);
+                  	  //The log files in MM change to scientific notation if they go above 7 digits, 
+                  	  // catching this exception so that the the name is generated properly, truncating to 7 digits for LLSpy
+                  	  try{
+                  		String.format("%07d",Integer.parseInt(totaltime));
+                  	  }
+                  	  catch (NumberFormatException nfe)
+                  	  {
+                  		totaltime = "9999999";
+                  	  }                  		  
+                  	  
+                  	      
+           
+                  	  
                   	  System.out.println("getting total time - done");
                   	  System.out.println("getting abs time");
                   	  String abstime = "none";
@@ -1171,6 +1184,7 @@ public class DataAnalysisPanel extends ListeningJPanel {
                   		  abstime_sum = 999999999;
                       	  System.out.println("Could not read timing metadata, inserting dummy value");
                   	  }
+                  	  System.out.println("Abs time :" + abstime);
 
                   	   // converting "abstime" to some dummy value to generate the "abstime" part of the filename
                       // to do this we take the actual time and convert it to ms
